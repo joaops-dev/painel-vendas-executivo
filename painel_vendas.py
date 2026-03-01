@@ -1,5 +1,5 @@
 """
-Painel de Vendas Executivo - Build 1.4.0
+Painel de Vendas Executivo - Build 1.5.0
 Desenvolvido por: João Pedro
 Descrição: Dashboard interativo para análise de faturamento, metas e performance de vendedores.
 """
@@ -7,6 +7,8 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import datetime
+import time
 
 # -----------------------------------------------------------------------------
 # 1. SETUP E CONSTANTES
@@ -148,10 +150,6 @@ with st.sidebar.expander('Exportar Dados'):
     csv_dados = df_filtrado.to_csv(index = False).encode('utf-8-sig')
     st.download_button('Baixar Planilha', csv_dados, 'relatorio_vendas.csv', 'text/csv')
 
-# Rodapé do Sistema
-st.sidebar.markdown('---')
-st.sidebar.caption('🛠️ Build v1.4.1 | Dev: João Pedro')
-
 # Renderização do Topo (Métricas Executivas)
 col_kpi_faturamento, col_kpi_qtd, col_kpi_ticket = st.columns(3)
 col_kpi_faturamento.metric('Faturamento Total', f'R$ {faturamento:,.2f}', delta = f'{diferenca_faturamento:,.2f}')
@@ -222,10 +220,86 @@ with st.expander('Acompanhamento de Metas'):
                 min_value = 0,
                 max_value = 100
             )
-        }
+        },
+        hide_index = True
     )
 
 # Oculta a tabela bruta em um expander para manter a interface limpa, servindo apenas para auditoria de dados pelo usuário.
 with st.expander('Visualizar Tabela de Dados Completa'):
     st.subheader(f'Mostrando {len(df_filtrado)} Vendas')
-    st.dataframe(df_filtrado, width = 'stretch')
+    st.dataframe(df_filtrado, width = 'stretch', hide_index = True)
+
+st.sidebar.markdown('---')
+senha_gestor = st.sidebar.text_input('Modo Gestor (Senha):', type = 'password')
+
+if senha_gestor == st.secrets['senha_admin']:
+    with st.sidebar.expander('Registrar Nova Venda'):
+        with st.form('form_nova_venda'):
+            # 1. Aqui entram os campos de preenchimento (ex: st.text_input, st.number_input)
+            nova_data = st.date_input('Escolha a Data:', datetime.date.today())
+
+            lista_vendedores = df['vendedor'].unique().tolist()
+            novo_vendedor = st.selectbox('Escolha o Vendedor:', lista_vendedores)
+
+            lista_produtos = df['produto'].unique().tolist()
+            novo_produto = st.selectbox('Escolha o Produto:', lista_produtos)
+
+            lista_regioes = df['regiao'].unique().tolist()
+            nova_regiao = st.selectbox('Escolha a Região:', lista_regioes)
+
+            novo_valor = st.number_input('Escolha o Valor:', min_value = 0.0, step = 100.0, format = '%.2f')
+
+            # 2. O botão de envio do formulário
+            botao_salvar = st.form_submit_button('Salvar Venda')
+
+            if botao_salvar:
+                conn_form = sqlite3.connect('vendas_empresa_teste.db')
+                cursor_form = conn_form.cursor()
+
+                query_form = 'INSERT INTO vendas (data, vendedor, produto, valor, regiao) VALUES (?, ?, ?, ?, ?)'
+                valores_form = (nova_data, novo_vendedor, novo_produto, novo_valor, nova_regiao)
+
+                cursor_form.execute(query_form, valores_form)
+                conn_form.commit()
+
+                conn_form.close()
+                st.success('Venda registrada com sucesso!')
+
+                time.sleep(1.5)
+
+                carregar_dados.clear()
+                st.rerun()
+
+    with st.expander('Área do Gestor: Gerenciar Vendas'):
+        st.subheader('Auditoria de Vendas Suspeitas')
+        st.markdown('---')
+        st.subheader('Excluir Registro')
+
+        id_da_venda = st.number_input('Digite o ID da Venda:', min_value = 1, step = 1)
+        botao_deletar = st.button('Cancelar Venda')
+
+        if botao_deletar:
+            conn_deletar = sqlite3.connect('vendas_empresa_teste.db')
+            cursor_deletar = conn_deletar.cursor()
+
+            query_deletar = 'DELETE FROM vendas WHERE id_venda = ?'
+            valores_deletar = (id_da_venda, )
+
+            cursor_deletar.execute(query_deletar, valores_deletar)
+            conn_deletar.commit()
+
+            conn_deletar.close()
+            st.success('Venda cancelada com sucesso!')
+
+            time.sleep(1.5)
+
+            carregar_dados.clear()
+            st.rerun()
+elif senha_gestor != '':
+    st.sidebar.error('Senha Não Reconhecida')
+else:
+    st.sidebar.info('Insira a senha para habilitar a edição de dados.')
+
+# Rodapé do Sistema
+st.sidebar.markdown('---')
+st.sidebar.caption('🛠️ Build v1.5.0 | Dev: João Pedro')
